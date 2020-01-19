@@ -1,0 +1,59 @@
+version: '3'
+
+volumes:
+  es-data:      # elasticsearch data
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.3.0
+    ports: [ '9200:9200', '9300:9300' ]
+    # volumes: [ 'es-data:/usr/share/elasticsearch/data' ]
+    environment:
+      # cf.: https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#docker-configuration-methods
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      network.host: 0.0.0.0
+      node.max_local_storage_nodes: 1
+      cluster.name: elk-cluster
+      bootstrap.memory_lock: 'true'
+      discovery.type: single-node
+
+  logstash:
+    # cf.: https://www.elastic.co/guide/en/logstash/current/docker-config.html
+    image: docker.elastic.co/logstash/logstash-oss:6.3.0
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    volumes:
+      - ./logstash/pipeline/:/usr/share/logstash/pipeline/
+      - ./logstash/input/:/usr/share/logstash/input/
+      - ./logstash/output/:/usr/share/logstash/output/
+    #hostname: suricata
+    depends_on:
+      - elasticsearch
+    environment:
+      LOG_LEVEL: info
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana-oss:6.3.0
+    ports: [ '5601:5601' ]
+    depends_on: [ elasticsearch ]
+    environment:
+      # cf.: https://www.elastic.co/guide/en/kibana/current/_configuring_kibana_on_docker.html
+      SERVER_NAME: rumpelbook
+      ELASTICSEARCH_URL: http://elasticsearch:9200 
+    
+  grokconstructor:
+    build: ./grokconstructor
+    ports:
+      - "8080:8080"
+
+  portainer:
+    image: portainer/portainer
+    command: -H unix:///var/run/docker.sock
+    restart: always
+    ports:
+      - 9000:9000
+      - 8000:8000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer:/data
